@@ -148,34 +148,68 @@ function isUrl(s) {
   try { const u = new URL(s); return ['http:', 'https:'].includes(u.protocol); } catch { return false; }
 }
 
+let currentData = '';
 function showResult(data) {
-  text.textContent = data;
-  const open = $('btnOpen');
-  if (isUrl(data)) {
+  currentData = data;
+  const url = isUrl(data);
+  result.classList.toggle('is-text', !url);
+  $('rKind').className = url ? 'kind' : 'kind text';
+  $('rKind').innerHTML = url ? ICON_LINK : ICON_TEXT;
+  $('rType').textContent = url ? 'リンク' : 'テキスト';
+  const open = $('btnOpen'), copy = $('btnCopy');
+  if (url) {
+    const u = new URL(data);
+    $('rHost').textContent = u.hostname.replace(/^www\./, '');
+    $('rHost').hidden = false;
+    text.textContent = decodeURIComponentSafe(data);
     open.href = data;
     const sameApp = data.startsWith(new URL('./', location.href).href);
     if (sameApp) open.removeAttribute('target'); else open.target = '_blank';
-    open.style.display = '';
+    open.hidden = false;
+  } else {
+    $('rHost').hidden = true;
+    text.textContent = data;
+    open.removeAttribute('href');
+    open.hidden = true;
   }
-  else { open.removeAttribute('href'); open.style.display = 'none'; }
-  $('btnShare').style.display = navigator.share ? '' : 'none';
+  // テキストのときはコピーが主役
+  copy.classList.toggle('primary', !url);
+  resetCopy();
+  $('btnShare').hidden = !navigator.share;
+  $('scrim').classList.add('show');
   result.classList.add('show');
 }
 
+let copyTimer = null;
+function resetCopy() {
+  clearTimeout(copyTimer);
+  $('btnCopy').classList.remove('done');
+  $('btnCopy').querySelector('span').textContent = 'コピー';
+}
 $('btnCopy').onclick = async () => {
-  try { await navigator.clipboard.writeText(text.textContent); $('btnCopy').textContent = 'コピー済'; }
-  catch { $('btnCopy').textContent = '失敗'; }
-  setTimeout(() => ($('btnCopy').textContent = 'コピー'), 1500);
+  const label = $('btnCopy').querySelector('span');
+  try {
+    await navigator.clipboard.writeText(currentData);
+    label.textContent = 'コピーしました';
+    $('btnCopy').classList.add('done');
+  } catch { label.textContent = 'コピーできませんでした'; }
+  clearTimeout(copyTimer);
+  copyTimer = setTimeout(resetCopy, 1800);
 };
 
 $('btnShare').onclick = () => {
-  const t = text.textContent;
+  const t = currentData;
   navigator.share(isUrl(t) ? { url: t } : { text: t }).catch(() => {});
 };
 
 // 結果を閉じて読み取りを再開
-$('btnCloseResult').onclick = () => {
+function hideResult() {
   result.classList.remove('show');
+  $('scrim').classList.remove('show');
+}
+$('scrim').onclick = () => $('btnCloseResult').click();
+$('btnCloseResult').onclick = () => {
+  hideResult();
   if (stream && stream.active) { scanning = true; requestAnimationFrame(tick); } else startCamera();
 };
 
@@ -389,7 +423,7 @@ const historyOpen = () => historyEl.classList.contains('show');
 function openHistory() {
   // 履歴を見ている間はカメラを止める（裏で読み取りが走らないように）
   stopCamera();
-  result.classList.remove('show');
+  hideResult();
   try { renderHistory(); } catch (e) { showError(e); }
   historyEl.classList.add('show');
   // スマホの「戻る」で閉じられるようにする
