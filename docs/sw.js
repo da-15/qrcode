@@ -1,5 +1,5 @@
 // バージョンを上げるとキャッシュが更新されます
-const CACHE = 'qr-reader-v1';
+const CACHE = 'qr-reader-v2';
 const ASSETS = [
   './',
   './index.html',
@@ -22,10 +22,15 @@ self.addEventListener('activate', (e) => {
   );
 });
 
-// キャッシュ優先（オフラインでも動作）
+// 画面とスクリプトはネット優先（更新がすぐ届く）、オフライン時はキャッシュ
 self.addEventListener('fetch', (e) => {
-  if (e.request.method !== 'GET') return;
+  if (e.request.method !== 'GET' || new URL(e.request.url).origin !== location.origin) return;
   e.respondWith(
-    caches.match(e.request, { ignoreSearch: true }).then((hit) => hit || fetch(e.request))
+    fetch(e.request)
+      .then((res) => {
+        if (res.ok) { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(e.request, copy)); }
+        return res;
+      })
+      .catch(() => caches.match(e.request, { ignoreSearch: true }).then((hit) => hit || caches.match('./index.html')))
   );
 });
