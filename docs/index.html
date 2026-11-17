@@ -37,9 +37,10 @@
       padding:20px 16px calc(20px + env(safe-area-inset-bottom)); box-shadow:0 -8px 24px rgba(0,0,0,.4); }
     #result.show { display:block; }
     #result p.label { color:var(--muted); font-size:12px; margin-bottom:6px; padding-right:44px; }
-    #result .close-x { position:absolute; top:10px; right:10px; width:36px; height:36px; border-radius:50%; border:none;
+    #result .close-x { position:absolute; top:10px; right:10px; }
+    .close-x { width:36px; height:36px; border-radius:50%; border:none;
       background:#374151; color:var(--fg); display:flex; align-items:center; justify-content:center; cursor:pointer; }
-    #result .close-x svg { width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:2.5; stroke-linecap:round; }
+    .close-x svg { width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:2.5; stroke-linecap:round; }
     #text { word-break:break-all; font-size:16px; max-height:30vh; overflow:auto; margin-bottom:14px; user-select:text; }
     #result .row { display:flex; gap:8px; }
     #result .row button, #result .row a { flex:1; padding:12px; border-radius:10px; border:none; font-size:15px;
@@ -49,7 +50,8 @@
       padding:calc(12px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom)); }
     #history.show { display:flex; }
     #history h2 { flex:none; font-size:18px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center; gap:8px; }
-    #history h2 button { background:#374151; color:var(--fg); border:none; border-radius:8px; padding:10px 14px; font-size:15px; }
+    #history .clear-all { flex:none; margin-top:12px; width:100%; padding:14px; border:none; border-radius:10px;
+      background:var(--card); color:#f87171; font-size:15px; font-weight:700; }
     #history ul { flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; }
     #result { z-index:30; }
     #err { display:none; position:fixed; left:8px; right:8px; top:calc(8px + env(safe-area-inset-top)); z-index:50;
@@ -102,9 +104,10 @@
   </div>
 
   <div id="history">
-    <h2><span>履歴</span><span><button id="btnClear">全削除</button> <button id="btnClose">閉じる</button></span></h2>
+    <h2><span>履歴</span><button id="btnClose" class="close-x" aria-label="閉じる" title="閉じる"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></h2>
     <p class="hint">左にスワイプで削除・タップで表示</p>
     <ul id="list"></ul>
+    <button id="btnClear" class="clear-all">履歴をすべて削除</button>
   </div>
 
   <div id="toast"><span>削除しました</span><button id="btnUndo">元に戻す</button></div>

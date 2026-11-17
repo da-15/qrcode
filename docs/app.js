@@ -179,6 +179,7 @@ function renderHistory() {
   const list = $('list');
   list.textContent = '';
   const h = loadHistory();
+  $('btnClear').hidden = !h.length;  // 履歴が空なら全削除ボタンは出さない
   if (!h.length) {
     const li = document.createElement('li');
     li.className = 'empty';
