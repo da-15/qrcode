@@ -46,6 +46,10 @@ function stopCamera() {
 
 function setupTorch() {
   const track = stream?.getVideoTracks()[0];
+  // 他の画面やアプリにカメラを奪われたら、表示中なら起動し直す
+  if (track) track.onended = () => {
+    if (!document.hidden && !historyOpen() && !result.classList.contains('show')) startCamera();
+  };
   const caps = track?.getCapabilities?.() || {};
   $('btnTorch').hidden = !caps.torch;
   torchOn = false;
@@ -102,7 +106,12 @@ function isUrl(s) {
 function showResult(data) {
   text.textContent = data;
   const open = $('btnOpen');
-  if (isUrl(data)) { open.href = data; open.style.display = ''; }
+  if (isUrl(data)) {
+    open.href = data;
+    const sameApp = data.startsWith(new URL('./', location.href).href);
+    if (sameApp) open.removeAttribute('target'); else open.target = '_blank';
+    open.style.display = '';
+  }
   else { open.removeAttribute('href'); open.style.display = 'none'; }
   $('btnShare').style.display = navigator.share ? '' : 'none';
   result.classList.add('show');
@@ -121,7 +130,7 @@ $('btnShare').onclick = () => {
 
 $('btnAgain').onclick = () => {
   result.classList.remove('show');
-  if (stream) { scanning = true; requestAnimationFrame(tick); } else startCamera();
+  if (stream && stream.active) { scanning = true; requestAnimationFrame(tick); } else startCamera();
 };
 
 $('btnSwitch').onclick = () => {
@@ -146,7 +155,12 @@ $('file').onchange = async (e) => {
 
 // 履歴（端末内のlocalStorageのみに保存）
 const KEY = 'qr-history';
-function loadHistory() { try { return JSON.parse(localStorage.getItem(KEY)) || []; } catch { return []; } }
+function loadHistory() {
+  try {
+    const h = JSON.parse(localStorage.getItem(KEY));
+    return Array.isArray(h) ? h.filter((x) => x && typeof x.data === 'string') : [];
+  } catch { return []; }
+}
 function saveHistory(data) {
   try {
     const h = loadHistory().filter((x) => x.data !== data);
@@ -156,27 +170,72 @@ function saveHistory(data) {
 }
 function renderHistory() {
   const list = $('list');
-  list.innerHTML = '';
+  list.textContent = '';
   const h = loadHistory();
-  if (!h.length) { list.innerHTML = '<li>まだ履歴はありません</li>'; return; }
+  if (!h.length) {
+    const li = document.createElement('li');
+    li.textContent = 'まだ履歴はありません';
+    list.appendChild(li);
+    return;
+  }
   for (const item of h) {
     const li = document.createElement('li');
     li.textContent = item.data;
     const sm = document.createElement('small');
-    sm.textContent = new Date(item.at).toLocaleString('ja-JP');
+    const d = new Date(item.at);
+    sm.textContent = isNaN(d) ? '' : d.toLocaleString('ja-JP');
     li.appendChild(sm);
-    li.onclick = () => { $('history').classList.remove('show'); scanning = false; showResult(item.data); };
+    li.onclick = () => { closeHistory(false); showResult(item.data); };
     list.appendChild(li);
   }
 }
-$('btnHistory').onclick = () => { renderHistory(); $('history').classList.add('show'); };
-$('btnClose').onclick = () => $('history').classList.remove('show');
-$('btnClear').onclick = () => { if (confirm('履歴をすべて削除しますか？')) { localStorage.removeItem(KEY); renderHistory(); } };
+
+const historyEl = $('history');
+const historyOpen = () => historyEl.classList.contains('show');
+
+function openHistory() {
+  // 履歴を見ている間はカメラを止める（裏で読み取りが走らないように）
+  stopCamera();
+  result.classList.remove('show');
+  try { renderHistory(); } catch (e) { showError(e); }
+  historyEl.classList.add('show');
+  // スマホの「戻る」で閉じられるようにする
+  try { history.pushState({ qrHistory: true }, ''); } catch {}
+}
+
+function closeHistory(resume = true) {
+  if (!historyOpen()) return;
+  historyEl.classList.remove('show');
+  if (history.state?.qrHistory) { try { history.back(); } catch {} }
+  if (resume) startCamera();
+}
+
+window.addEventListener('popstate', () => {
+  if (historyOpen()) { historyEl.classList.remove('show'); startCamera(); }
+});
+
+$('btnHistory').onclick = openHistory;
+$('btnClose').onclick = () => closeHistory();
+$('btnClear').onclick = () => {
+  if (!confirm('履歴をすべて削除しますか？')) return;
+  try { localStorage.removeItem(KEY); } catch {}
+  renderHistory();
+};
+
+// 予期しないエラーは画面に表示（原因調査用）。タップで消える
+function showError(e) {
+  const el = $('err');
+  el.textContent = 'エラー: ' + (e?.message || e?.reason?.message || e?.reason || e);
+  el.classList.add('show');
+}
+$('err').onclick = () => $('err').classList.remove('show');
+window.addEventListener('error', (e) => showError(e.error || e.message));
+window.addEventListener('unhandledrejection', (e) => showError(e.reason));
 
 // バックグラウンドではカメラを止める
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) stopCamera();
-  else if (!result.classList.contains('show')) startCamera();
+  else if (!result.classList.contains('show') && !historyOpen()) startCamera();
 });
 
 // Service Worker 登録
