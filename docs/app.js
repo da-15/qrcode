@@ -5,7 +5,6 @@ const video = $('video'), canvas = $('canvas'), ctx = canvas.getContext('2d', { 
 const msg = $('msg'), result = $('result'), text = $('text');
 
 let stream = null;
-let facingMode = 'environment';
 let scanning = false;
 let torchOn = false;
 let detector = null;
@@ -21,7 +20,7 @@ async function startCamera() {
   stopCamera();
   try {
     stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode, width: { ideal: 1280 }, height: { ideal: 720 } },
+      video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
       audio: false,
     });
     video.srcObject = stream;
@@ -51,15 +50,28 @@ function setupTorch() {
     if (!document.hidden && !historyOpen() && !result.classList.contains('show')) startCamera();
   };
   const caps = track?.getCapabilities?.() || {};
-  $('btnTorch').hidden = !caps.torch;
+  // ライト非対応の端末（iPhoneなど）では薄く表示
+  $('btnTorch').classList.toggle('unavailable', !caps.torch);
   torchOn = false;
+  $('btnTorch').setAttribute('aria-pressed', 'false');
+}
+
+let msgTimer = null;
+function flashMsg(t) {
+  const prev = 'QRコードを枠内に合わせてください';
+  msg.textContent = t;
+  clearTimeout(msgTimer);
+  msgTimer = setTimeout(() => (msg.textContent = prev), 2500);
 }
 
 $('btnTorch').onclick = async () => {
   const track = stream?.getVideoTracks()[0];
   if (!track) return;
+  if ($('btnTorch').classList.contains('unavailable')) { flashMsg('この端末ではライトを使えません'); return; }
   torchOn = !torchOn;
-  try { await track.applyConstraints({ advanced: [{ torch: torchOn }] }); } catch {}
+  try { await track.applyConstraints({ advanced: [{ torch: torchOn }] }); }
+  catch { torchOn = false; }
+  $('btnTorch').setAttribute('aria-pressed', String(torchOn));
 };
 
 let lastScan = 0;
@@ -128,15 +140,10 @@ $('btnShare').onclick = () => {
   navigator.share(isUrl(t) ? { url: t } : { text: t }).catch(() => {});
 };
 
-$('btnAgain').onclick = () => {
+// 結果を閉じて読み取りを再開
+$('btnCloseResult').onclick = () => {
   result.classList.remove('show');
   if (stream && stream.active) { scanning = true; requestAnimationFrame(tick); } else startCamera();
-};
-
-$('btnSwitch').onclick = () => {
-  facingMode = facingMode === 'environment' ? 'user' : 'environment';
-  result.classList.remove('show');
-  startCamera();
 };
 
 // 画像ファイルから読み取り
@@ -174,21 +181,100 @@ function renderHistory() {
   const h = loadHistory();
   if (!h.length) {
     const li = document.createElement('li');
+    li.className = 'empty';
     li.textContent = 'まだ履歴はありません';
     list.appendChild(li);
     return;
   }
-  for (const item of h) {
-    const li = document.createElement('li');
-    li.textContent = item.data;
-    const sm = document.createElement('small');
-    const d = new Date(item.at);
-    sm.textContent = isNaN(d) ? '' : d.toLocaleString('ja-JP');
-    li.appendChild(sm);
-    li.onclick = () => { closeHistory(false); showResult(item.data); };
-    list.appendChild(li);
-  }
+  for (const item of h) list.appendChild(historyItem(item));
 }
+
+function historyItem(item) {
+  const li = document.createElement('li');
+  const del = document.createElement('div');
+  del.className = 'del';
+  del.textContent = '削除';
+  const body = document.createElement('div');
+  body.className = 'item';
+  body.textContent = item.data;
+  const sm = document.createElement('small');
+  const d = new Date(item.at);
+  sm.textContent = isNaN(d) ? '' : d.toLocaleString('ja-JP');
+  body.appendChild(sm);
+  li.append(del, body);
+  attachSwipe(li, body, item);
+  return li;
+}
+
+// 左スワイプで削除、軽いタップで結果を表示
+function attachSwipe(li, body, item) {
+  let startX = 0, startY = 0, dx = 0, dragging = false, decided = false, horizontal = false, id = null;
+
+  body.addEventListener('pointerdown', (e) => {
+    id = e.pointerId; startX = e.clientX; startY = e.clientY; dx = 0;
+    dragging = true; decided = false; horizontal = false;
+    body.classList.remove('snap');
+  });
+  body.addEventListener('pointermove', (e) => {
+    if (!dragging || e.pointerId !== id) return;
+    const mx = e.clientX - startX, my = e.clientY - startY;
+    if (!decided && (Math.abs(mx) > 8 || Math.abs(my) > 8)) {
+      decided = true;
+      horizontal = Math.abs(mx) > Math.abs(my);
+      if (horizontal) { try { body.setPointerCapture(id); } catch {} }
+    }
+    if (horizontal) {
+      dx = Math.min(0, mx);  // 左方向のみ
+      body.style.transform = `translateX(${dx}px)`;
+    }
+  });
+  const end = (e) => {
+    if (!dragging || e.pointerId !== id) return;
+    dragging = false;
+    if (!decided && e.type === 'pointerup') {
+      // タップ
+      closeHistory(false); showResult(item.data);
+      return;
+    }
+    body.classList.add('snap');
+    if (horizontal && dx < -body.offsetWidth * 0.35) {
+      body.style.transform = `translateX(-100%)`;
+      setTimeout(() => removeItem(li, item), 180);
+    } else {
+      body.style.transform = '';
+    }
+  };
+  body.addEventListener('pointerup', end);
+  body.addEventListener('pointercancel', end);
+}
+
+let undoState = null, toastTimer = null;
+function removeItem(li, item) {
+  const h = loadHistory();
+  const index = h.findIndex((x) => x.data === item.data && x.at === item.at);
+  if (index < 0) return;
+  h.splice(index, 1);
+  try { localStorage.setItem(KEY, JSON.stringify(h)); } catch {}
+  navigator.vibrate?.(30);
+  // 縮めて消す
+  li.style.height = li.offsetHeight + 'px';
+  requestAnimationFrame(() => { li.style.height = '0'; li.style.marginBottom = '0'; li.style.opacity = '0'; });
+  setTimeout(() => { li.remove(); if (!loadHistory().length) renderHistory(); }, 220);
+  undoState = { item, index };
+  const toast = $('toast');
+  toast.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { toast.classList.remove('show'); undoState = null; }, 4000);
+}
+$('btnUndo').onclick = () => {
+  if (!undoState) return;
+  const h = loadHistory();
+  h.splice(Math.min(undoState.index, h.length), 0, undoState.item);
+  try { localStorage.setItem(KEY, JSON.stringify(h.slice(0, 100))); } catch {}
+  undoState = null;
+  $('toast').classList.remove('show');
+  renderHistory();
+};
 
 const historyEl = $('history');
 const historyOpen = () => historyEl.classList.contains('show');
@@ -206,6 +292,7 @@ function openHistory() {
 function closeHistory(resume = true) {
   if (!historyOpen()) return;
   historyEl.classList.remove('show');
+  $('toast').classList.remove('show');
   if (history.state?.qrHistory) { try { history.back(); } catch {} }
   if (resume) startCamera();
 }
