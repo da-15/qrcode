@@ -26,10 +26,7 @@ async function startCamera() {
     video.classList.remove('ready');
     video.srcObject = stream;
     await video.play();
-    // 最初のフレームが来てから表示
-    const show = () => video.classList.add('ready');
-    if (video.videoWidth) requestAnimationFrame(show);
-    else video.addEventListener('loadeddata', show, { once: true });
+    revealVideo();
     msg.textContent = 'QRコードを枠内に合わせてください';
     setupTorch();
     scanning = true;
@@ -39,6 +36,17 @@ async function startCamera() {
     msg.textContent = location.protocol !== 'https:' && location.hostname !== 'localhost'
       ? 'カメラにはHTTPS接続が必要です'
       : 'カメラを使えません（権限を確認してください）。「画像から読む」も使えます';
+  }
+}
+
+// iPhoneは再生開始直後の数フレームを小さく描くことがあるため、
+// 2フレーム描画されてから表示する（非対応ブラウザは少し待つ）
+function revealVideo() {
+  const show = () => video.classList.add('ready');
+  if (video.requestVideoFrameCallback) {
+    video.requestVideoFrameCallback(() => video.requestVideoFrameCallback(show));
+  } else {
+    setTimeout(show, 300);
   }
 }
 
@@ -268,8 +276,6 @@ function removeItem(li, item) {
   setTimeout(() => { li.remove(); if (!loadHistory().length) renderHistory(); }, 220);
   undoState = { item, index };
   const toast = $('toast');
-  $('toastMsg').textContent = '削除しました';
-  $('btnUndo').hidden = false;
   toast.classList.add('show');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { toast.classList.remove('show'); undoState = null; }, 4000);
@@ -283,16 +289,9 @@ function undoDelete(e) {
   h.splice(Math.min(undoState.index, h.length), 0, undoState.item);
   try { localStorage.setItem(KEY, JSON.stringify(h.slice(0, 100))); } catch {}
   undoState = null;
+  $('toast').classList.remove('show');
   renderHistory();
-  // 通知はすぐ消さずに「元に戻しました」と少し残す。
-  // すぐ消すと、iPhoneが遅れて送るタップが下の「履歴をすべて削除」に当たってしまうため
-  ignoreTapsUntil = Date.now() + 700;
-  $('toastMsg').textContent = '元に戻しました';
-  $('btnUndo').hidden = true;
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => $('toast').classList.remove('show'), 1200);
 }
-let ignoreTapsUntil = 0;
 $('btnUndo').addEventListener('pointerup', undoDelete);
 $('btnUndo').addEventListener('click', undoDelete);
 
@@ -324,7 +323,6 @@ window.addEventListener('popstate', () => {
 $('btnHistory').onclick = openHistory;
 $('btnClose').onclick = () => closeHistory();
 $('btnClear').onclick = () => {
-  if (Date.now() < ignoreTapsUntil) return;  // 「元に戻す」直後の取りこぼしタップは無視
   if (!confirm('履歴をすべて削除しますか？')) return;
   try { localStorage.removeItem(KEY); } catch {}
   renderHistory();
