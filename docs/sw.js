@@ -1,13 +1,14 @@
 // バージョンを上げるとキャッシュが更新されます
-const CACHE = 'qr-reader-v16';
+const CACHE = 'qr-reader-v17';
 const ASSETS = [
   './',
   './index.html',
   './app.js',
   './jsQR.js',
   './manifest.webmanifest',
-  './icons/icon-192.png',
-  './icons/icon-512.png',
+  './icons/app-192-w.png',
+  './icons/apple-touch-180-w.png',
+  './icons/app-512-w.png',
 ];
 
 self.addEventListener('install', (e) => {
