@@ -1,5 +1,5 @@
 // バージョンを上げるとキャッシュが更新されます
-const CACHE = 'qr-reader-v2';
+const CACHE = 'qr-reader-v3';
 const ASSETS = [
   './',
   './index.html',
