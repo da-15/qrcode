@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#111827">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>QRリーダー</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <style>
+    :root { --bg:#111827; --fg:#f9fafb; --accent:#22c55e; --muted:#9ca3af; --card:#1f2937; }
+    * { box-sizing:border-box; margin:0; padding:0; }
+    html,body { height:100%; background:var(--bg); color:var(--fg);
+      font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif; }
+    body { display:flex; flex-direction:column; padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom); }
+    header { padding:14px 16px; font-weight:700; font-size:18px; display:flex; justify-content:space-between; align-items:center; }
+    header button { background:none; border:1px solid #374151; color:var(--fg); border-radius:8px; padding:6px 10px; font-size:13px; }
+    #stage { position:relative; flex:1; overflow:hidden; background:#000; }
+    video { width:100%; height:100%; object-fit:cover; }
+    #frame { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; }
+    #frame div { width:min(65vw,280px); aspect-ratio:1; border:3px solid var(--accent); border-radius:16px;
+      box-shadow:0 0 0 9999px rgba(0,0,0,.45); }
+    #msg { position:absolute; bottom:16px; left:0; right:0; text-align:center; color:var(--muted); font-size:14px; }
+    #controls { display:flex; gap:8px; padding:12px 16px; }
+    #controls button, #controls label { flex:1; text-align:center; background:var(--card); color:var(--fg); border:none;
+      border-radius:10px; padding:12px; font-size:15px; cursor:pointer; }
+    #file { display:none; }
+    #result { display:none; position:fixed; inset:auto 0 0 0; background:var(--card); border-radius:16px 16px 0 0;
+      padding:20px 16px calc(20px + env(safe-area-inset-bottom)); box-shadow:0 -8px 24px rgba(0,0,0,.4); }
+    #result.show { display:block; }
+    #result p.label { color:var(--muted); font-size:12px; margin-bottom:6px; }
+    #text { word-break:break-all; font-size:16px; max-height:30vh; overflow:auto; margin-bottom:14px; user-select:text; }
+    #result .row { display:flex; gap:8px; }
+    #result .row button, #result .row a { flex:1; padding:12px; border-radius:10px; border:none; font-size:15px;
+      text-align:center; text-decoration:none; background:#374151; color:var(--fg); }
+    #result .row .primary { background:var(--accent); color:#052e16; font-weight:700; }
+    #history { display:none; position:fixed; inset:0; background:var(--bg); padding:16px; overflow:auto; }
+    #history.show { display:block; }
+    #history h2 { font-size:18px; margin-bottom:12px; display:flex; justify-content:space-between; }
+    #history ul { list-style:none; }
+    #history li { background:var(--card); border-radius:10px; padding:12px; margin-bottom:8px; word-break:break-all; }
+    #history li small { display:block; color:var(--muted); margin-top:4px; }
+  </style>
+</head>
+<body>
+  <header>
+    <span>QRリーダー</span>
+    <button id="btnHistory">履歴</button>
+  </header>
+
+  <div id="stage">
+    <video id="video" playsinline muted></video>
+    <div id="frame"><div></div></div>
+    <div id="msg">カメラを起動しています…</div>
+  </div>
+
+  <div id="controls">
+    <button id="btnSwitch">カメラ切替</button>
+    <button id="btnTorch" hidden>ライト</button>
+    <label for="file">画像から読む</label>
+    <input type="file" id="file" accept="image/*">
+  </div>
+
+  <div id="result">
+    <p class="label">読み取り結果</p>
+    <div id="text"></div>
+    <div class="row">
+      <a id="btnOpen" class="primary" target="_blank" rel="noopener">開く</a>
+      <button id="btnCopy">コピー</button>
+      <button id="btnShare">共有</button>
+      <button id="btnAgain">続ける</button>
+    </div>
+  </div>
+
+  <div id="history">
+    <h2><span>履歴</span><span><button id="btnClear">全削除</button> <button id="btnClose">閉じる</button></span></h2>
+    <ul id="list"></ul>
+  </div>
+
+  <canvas id="canvas" hidden></canvas>
+  <script src="jsQR.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
