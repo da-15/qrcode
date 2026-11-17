@@ -23,8 +23,13 @@ async function startCamera() {
       video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
       audio: false,
     });
+    video.classList.remove('ready');
     video.srcObject = stream;
     await video.play();
+    // 最初のフレームが来てから表示
+    const show = () => video.classList.add('ready');
+    if (video.videoWidth) requestAnimationFrame(show);
+    else video.addEventListener('loadeddata', show, { once: true });
     msg.textContent = 'QRコードを枠内に合わせてください';
     setupTorch();
     scanning = true;
