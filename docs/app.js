@@ -267,7 +267,10 @@ function removeItem(li, item) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { toast.classList.remove('show'); undoState = null; }, 4000);
 }
-$('btnUndo').onclick = () => {
+// iPhoneではスワイプ直後の1回目のタップが click にならないことがあるため、
+// 指を離した時点（pointerup）で実行する。click は同じ操作の二重実行を防ぐだけ
+function undoDelete(e) {
+  e?.preventDefault();
   if (!undoState) return;
   const h = loadHistory();
   h.splice(Math.min(undoState.index, h.length), 0, undoState.item);
@@ -275,7 +278,9 @@ $('btnUndo').onclick = () => {
   undoState = null;
   $('toast').classList.remove('show');
   renderHistory();
-};
+}
+$('btnUndo').addEventListener('pointerup', undoDelete);
+$('btnUndo').addEventListener('click', undoDelete);
 
 const historyEl = $('history');
 const historyOpen = () => historyEl.classList.contains('show');
