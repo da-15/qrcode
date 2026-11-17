@@ -5,7 +5,6 @@ const video = $('video'), canvas = $('canvas'), ctx = canvas.getContext('2d', { 
 const msg = $('msg'), result = $('result'), text = $('text');
 
 let stream = null;
-let facingMode = 'environment';
 let scanning = false;
 let torchOn = false;
 let detector = null;
@@ -21,7 +20,7 @@ async function startCamera() {
   stopCamera();
   try {
     stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode, width: { ideal: 1280 }, height: { ideal: 720 } },
+      video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
       audio: false,
     });
     video.srcObject = stream;
@@ -51,14 +50,24 @@ function setupTorch() {
     if (!document.hidden && !historyOpen() && !result.classList.contains('show')) startCamera();
   };
   const caps = track?.getCapabilities?.() || {};
-  $('btnTorch').hidden = !caps.torch;
+  // ライト非対応の端末（iPhoneなど）では薄く表示
+  $('btnTorch').classList.toggle('unavailable', !caps.torch);
   torchOn = false;
   $('btnTorch').setAttribute('aria-pressed', 'false');
+}
+
+let msgTimer = null;
+function flashMsg(t) {
+  const prev = 'QRコードを枠内に合わせてください';
+  msg.textContent = t;
+  clearTimeout(msgTimer);
+  msgTimer = setTimeout(() => (msg.textContent = prev), 2500);
 }
 
 $('btnTorch').onclick = async () => {
   const track = stream?.getVideoTracks()[0];
   if (!track) return;
+  if ($('btnTorch').classList.contains('unavailable')) { flashMsg('この端末ではライトを使えません'); return; }
   torchOn = !torchOn;
   try { await track.applyConstraints({ advanced: [{ torch: torchOn }] }); }
   catch { torchOn = false; }
@@ -131,15 +140,10 @@ $('btnShare').onclick = () => {
   navigator.share(isUrl(t) ? { url: t } : { text: t }).catch(() => {});
 };
 
-$('btnAgain').onclick = () => {
+// 結果を閉じて読み取りを再開
+$('btnCloseResult').onclick = () => {
   result.classList.remove('show');
   if (stream && stream.active) { scanning = true; requestAnimationFrame(tick); } else startCamera();
-};
-
-$('btnSwitch').onclick = () => {
-  facingMode = facingMode === 'environment' ? 'user' : 'environment';
-  result.classList.remove('show');
-  startCamera();
 };
 
 // 画像ファイルから読み取り
