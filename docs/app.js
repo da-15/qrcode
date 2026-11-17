@@ -208,36 +208,99 @@ function saveHistory(data) {
     localStorage.setItem(KEY, JSON.stringify(h.slice(0, 100)));
   } catch {}
 }
+const SVG = (d) => `<svg viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`;
+const ICON_LINK = SVG('<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>');
+const ICON_TEXT = SVG('<path d="M5 6h14M5 11h14M5 16h9"/>');
+const ICON_TRASH = SVG('<path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/>');
+const ICON_EMPTY = SVG('<rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><path d="M14 14h2v2M20 14v6h-6"/>');
+
+// 日付の見出し（今日／昨日／11月15日(土)／2025年12月1日）
+function dayLabel(d) {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const day = new Date(d); day.setHours(0, 0, 0, 0);
+  const diff = Math.round((today - day) / 86400000);
+  if (diff === 0) return '今日';
+  if (diff === 1) return '昨日';
+  const opt = { month: 'long', day: 'numeric', weekday: 'short' };
+  if (day.getFullYear() !== today.getFullYear()) opt.year = 'numeric';
+  return day.toLocaleDateString('ja-JP', opt);
+}
+
 function renderHistory() {
   const list = $('list');
   list.textContent = '';
   const h = loadHistory();
+  $('hCount').textContent = h.length ? `${h.length}件` : '';
+  $('btnClear').disabled = !h.length;
   if (!h.length) {
-    const li = document.createElement('li');
-    li.className = 'empty';
-    li.textContent = 'まだ履歴はありません';
-    list.appendChild(li);
+    list.innerHTML = `<div class="empty">${ICON_EMPTY}<strong>まだ履歴はありません</strong><p>読み取ったQRコードがここに残ります</p></div>`;
     return;
   }
-  for (const item of h) list.appendChild(historyItem(item));
+  let section = null, ul = null, label = null;
+  for (const item of h) {
+    const d = new Date(item.at);
+    const l = isNaN(d) ? '日付不明' : dayLabel(d);
+    if (l !== label) {
+      label = l;
+      section = document.createElement('section');
+      const h3 = document.createElement('h3');
+      h3.textContent = l;
+      ul = document.createElement('ul');
+      section.append(h3, ul);
+      list.appendChild(section);
+    }
+    ul.appendChild(historyItem(item, d));
+  }
+  const hint = document.createElement('p');
+  hint.className = 'hint';
+  hint.textContent = '左にスワイプで削除';
+  list.appendChild(hint);
 }
 
-function historyItem(item) {
+function historyItem(item, d) {
   const li = document.createElement('li');
   const del = document.createElement('div');
   del.className = 'del';
-  del.textContent = '削除';
+  del.innerHTML = ICON_TRASH + '<span>削除</span>';
   const body = document.createElement('div');
   body.className = 'item';
-  body.textContent = item.data;
-  const sm = document.createElement('small');
-  const d = new Date(item.at);
-  sm.textContent = isNaN(d) ? '' : d.toLocaleString('ja-JP');
-  body.appendChild(sm);
+
+  const kind = document.createElement('div');
+  const main = document.createElement('div');
+  main.className = 'main';
+  const ttl = document.createElement('div');
+  ttl.className = 'ttl';
+  main.appendChild(ttl);
+  if (isUrl(item.data)) {
+    // URLはサイト名を大きく、残りを小さく
+    const u = new URL(item.data);
+    kind.className = 'kind';
+    kind.innerHTML = ICON_LINK;
+    ttl.textContent = u.hostname.replace(/^www\./, '');
+    const rest = decodeURIComponentSafe(u.pathname + u.search + u.hash);
+    if (rest && rest !== '/') {
+      const sub = document.createElement('div');
+      sub.className = 'sub';
+      sub.textContent = rest;
+      main.appendChild(sub);
+    }
+  } else {
+    kind.className = 'kind text';
+    kind.innerHTML = ICON_TEXT;
+    ttl.textContent = item.data;
+  }
+  const time = document.createElement('time');
+  if (!isNaN(d)) {
+    time.dateTime = d.toISOString();
+    time.textContent = d.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+  }
+  body.append(kind, main, time);
   li.append(del, body);
   attachSwipe(li, body, item);
   return li;
 }
+
+function decodeURIComponentSafe(s) { try { return decodeURIComponent(s); } catch { return s; } }
 
 // 左スワイプで削除、軽いタップで結果を表示
 function attachSwipe(li, body, item) {
@@ -291,8 +354,14 @@ function removeItem(li, item) {
   navigator.vibrate?.(30);
   // 縮めて消す
   li.style.height = li.offsetHeight + 'px';
-  requestAnimationFrame(() => { li.style.height = '0'; li.style.marginBottom = '0'; li.style.opacity = '0'; });
-  setTimeout(() => { li.remove(); if (!loadHistory().length) renderHistory(); }, 220);
+  requestAnimationFrame(() => { li.style.height = '0'; li.style.opacity = '0'; });
+  setTimeout(() => {
+    const ul = li.parentElement;
+    li.remove();
+    if (ul && !ul.children.length) ul.parentElement.remove();  // その日の行が空になったら見出しごと消す
+    const n = loadHistory().length;
+    if (!n) renderHistory(); else $('hCount').textContent = `${n}件`;
+  }, 220);
   undoState = { item, index };
   const toast = $('toast');
   toast.classList.add('show');
