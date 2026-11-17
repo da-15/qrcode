@@ -268,6 +268,8 @@ function removeItem(li, item) {
   setTimeout(() => { li.remove(); if (!loadHistory().length) renderHistory(); }, 220);
   undoState = { item, index };
   const toast = $('toast');
+  $('toastMsg').textContent = '削除しました';
+  $('btnUndo').hidden = false;
   toast.classList.add('show');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { toast.classList.remove('show'); undoState = null; }, 4000);
@@ -281,9 +283,16 @@ function undoDelete(e) {
   h.splice(Math.min(undoState.index, h.length), 0, undoState.item);
   try { localStorage.setItem(KEY, JSON.stringify(h.slice(0, 100))); } catch {}
   undoState = null;
-  $('toast').classList.remove('show');
   renderHistory();
+  // 通知はすぐ消さずに「元に戻しました」と少し残す。
+  // すぐ消すと、iPhoneが遅れて送るタップが下の「履歴をすべて削除」に当たってしまうため
+  ignoreTapsUntil = Date.now() + 700;
+  $('toastMsg').textContent = '元に戻しました';
+  $('btnUndo').hidden = true;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => $('toast').classList.remove('show'), 1200);
 }
+let ignoreTapsUntil = 0;
 $('btnUndo').addEventListener('pointerup', undoDelete);
 $('btnUndo').addEventListener('click', undoDelete);
 
@@ -315,6 +324,7 @@ window.addEventListener('popstate', () => {
 $('btnHistory').onclick = openHistory;
 $('btnClose').onclick = () => closeHistory();
 $('btnClear').onclick = () => {
+  if (Date.now() < ignoreTapsUntil) return;  // 「元に戻す」直後の取りこぼしタップは無視
   if (!confirm('履歴をすべて削除しますか？')) return;
   try { localStorage.removeItem(KEY); } catch {}
   renderHistory();

@@ -73,6 +73,8 @@
     #toast { display:none; position:fixed; left:16px; right:16px; bottom:calc(16px + env(safe-area-inset-bottom)); z-index:40;
       background:#374151; color:var(--fg); border-radius:10px; padding:12px 14px; align-items:center; justify-content:space-between; font-size:14px; touch-action:manipulation; }
     #toast.show { display:flex; }
+    /* 履歴画面では「履歴をすべて削除」と重ならないよう、その上に出す */
+    #history.show ~ #toast { bottom:calc(84px + env(safe-area-inset-bottom)); }
     #toast button { background:none; border:none; color:var(--accent); font-weight:700; font-size:15px; padding:12px 16px; margin:-12px -14px -12px 0;
       touch-action:manipulation; -webkit-tap-highlight-color:transparent; }
   </style>
@@ -113,7 +115,7 @@
     <button id="btnClear" class="clear-all">履歴をすべて削除</button>
   </div>
 
-  <div id="toast"><span>削除しました</span><button id="btnUndo">元に戻す</button></div>
+  <div id="toast"><span id="toastMsg">削除しました</span><button id="btnUndo">元に戻す</button></div>
   <div id="err"></div>
   <canvas id="canvas" hidden></canvas>
   <script src="jsQR.js"></script>
