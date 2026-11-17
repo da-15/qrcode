@@ -23,10 +23,9 @@ async function startCamera() {
       video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
       audio: false,
     });
-    video.classList.remove('ready');
     video.srcObject = stream;
     await video.play();
-    revealVideo();
+    startRender();
     msg.textContent = 'QRコードを枠内に合わせてください';
     setupTorch();
     scanning = true;
@@ -39,21 +38,42 @@ async function startCamera() {
   }
 }
 
-// iPhoneは再生開始直後の数フレームを小さく描くことがあるため、
-// 2フレーム描画されてから表示する（非対応ブラウザは少し待つ）
-function revealVideo() {
-  const show = () => video.classList.add('ready');
-  if (video.requestVideoFrameCallback) {
-    video.requestVideoFrameCallback(() => video.requestVideoFrameCallback(show));
-  } else {
-    setTimeout(show, 300);
-  }
+// 映像は <video> をそのまま見せず、表示用 canvas に毎フレーム描く。
+// iPhoneは <video> の表示サイズを起動直後に小さく描くことがあるため、
+// 描く大きさを自分で決めて、最初から枠いっぱいに表示する
+const view = $('view'), viewCtx = view.getContext('2d');
+let rendering = false;
+
+function fitView() {
+  const r = view.getBoundingClientRect();
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const w = Math.round(r.width * dpr), h = Math.round(r.height * dpr);
+  if (w && h && (view.width !== w || view.height !== h)) { view.width = w; view.height = h; }
+}
+new ResizeObserver(fitView).observe(view);
+
+function startRender() {
+  if (rendering) return;
+  rendering = true;
+  const draw = () => {
+    if (!stream) { rendering = false; return; }
+    const vw = video.videoWidth, vh = video.videoHeight;
+    if (vw && vh && view.width && view.height) {
+      // object-fit: cover と同じ切り抜き
+      const scale = Math.max(view.width / vw, view.height / vh);
+      const dw = vw * scale, dh = vh * scale;
+      viewCtx.drawImage(video, (view.width - dw) / 2, (view.height - dh) / 2, dw, dh);
+    }
+    requestAnimationFrame(draw);
+  };
+  requestAnimationFrame(draw);
 }
 
 function stopCamera() {
   scanning = false;
   stream?.getTracks().forEach((t) => t.stop());
   stream = null;
+  viewCtx.clearRect(0, 0, view.width, view.height);
 }
 
 function setupTorch() {
