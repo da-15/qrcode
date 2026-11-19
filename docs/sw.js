@@ -1,4 +1,4 @@
-// バージョンを上げるとキャッシュが更新されます
+// ネット優先なので、更新のたびにこの名前を変える必要はありません（ファイルを消したときだけ変える）
 const CACHE = 'qr-reader-v17';
 const ASSETS = [
   './',
@@ -32,6 +32,9 @@ self.addEventListener('fetch', (e) => {
         if (res.ok) { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(e.request, copy)); }
         return res;
       })
-      .catch(() => caches.match(e.request, { ignoreSearch: true }).then((hit) => hit || caches.match('./index.html')))
+      .catch(async () =>
+        (await caches.match(e.request, { ignoreSearch: true })) ||
+        // 画面の読み込みだけはトップページで代用。画像などは失敗のまま返す
+        (e.request.mode === 'navigate' ? caches.match('./index.html') : Response.error()))
   );
 });

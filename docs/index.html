@@ -14,18 +14,17 @@
     :root { --bg:#111827; --fg:#f9fafb; --accent:#22c55e; --muted:#9ca3af; --card:#1f2937; }
     * { box-sizing:border-box; margin:0; padding:0; }
     [hidden] { display:none !important; }
-    html,body { height:100%; background:var(--bg); color:var(--fg);
+    html, body { background:var(--bg); color:var(--fg);
       font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif; }
     body { position:fixed; inset:0; display:flex; flex-direction:column; padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom); }
     header { padding:14px 16px; font-weight:700; font-size:18px; }
-    .icon-btn { display:inline-flex; align-items:center; justify-content:center; width:44px; height:44px; border-radius:50%;
+    .icon-btn { display:inline-flex; align-items:center; justify-content:center; width:56px; height:56px; border-radius:50%;
       background:var(--card); color:var(--fg); border:none; cursor:pointer; -webkit-tap-highlight-color:transparent; }
-    .icon-btn svg { width:24px; height:24px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+    .icon-btn svg { width:26px; height:26px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
     .icon-btn:active { transform:scale(.92); }
     .icon-btn[aria-pressed="true"] { background:#facc15; color:#111827; }
     .icon-btn.unavailable { opacity:.35; }
     #stage { position:relative; flex:1; min-height:0; overflow:hidden; background:#000; }
-    /* 枠に直接はめ込み、映像サイズが分かるまでの伸び縮みを防ぐ。映像が来るまでは非表示 */
     /* <video> は映像の受け取り用。表示は上に重ねた canvas に描く */
     video { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
     #view { position:absolute; inset:0; width:100%; height:100%; background:#000; display:block; }
@@ -34,8 +33,6 @@
       box-shadow:0 0 0 9999px rgba(0,0,0,.45); }
     #msg { position:absolute; bottom:16px; left:0; right:0; text-align:center; color:var(--muted); font-size:14px; }
     #controls { display:flex; justify-content:space-evenly; align-items:center; padding:14px 16px; }
-    #controls .icon-btn { width:56px; height:56px; }
-    #controls .icon-btn svg { width:26px; height:26px; }
     #file { display:none; }
     .close-x { width:36px; height:36px; border-radius:50%; border:none;
       background:#374151; color:var(--fg); display:flex; align-items:center; justify-content:center; cursor:pointer; }

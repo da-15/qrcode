@@ -4,10 +4,13 @@ const $ = (id) => document.getElementById(id);
 const video = $('video'), canvas = $('canvas'), ctx = canvas.getContext('2d', { willReadFrequently: true });
 const msg = $('msg'), result = $('result'), text = $('text');
 
+const SCAN_MSG = 'QRコードを枠内に合わせてください';
+
 let stream = null;
 let scanning = false;
 let torchOn = false;
 let detector = null;
+let cameraRequest = 0;  // 起動要求の番号。古い要求の結果は捨てる
 
 // ネイティブの BarcodeDetector があれば優先（高速）、なければ jsQR
 if ('BarcodeDetector' in window) {
@@ -18,18 +21,21 @@ if ('BarcodeDetector' in window) {
 
 async function startCamera() {
   stopCamera();
+  const req = cameraRequest;
   try {
-    stream = await navigator.mediaDevices.getUserMedia({
+    const s = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
       audio: false,
     });
+    // 待っている間に別の起動や停止があったら、このカメラは使わずに止める
+    if (req !== cameraRequest) { s.getTracks().forEach((t) => t.stop()); return; }
+    stream = s;
     video.srcObject = stream;
     await video.play();
-    startRender();
-    msg.textContent = 'QRコードを枠内に合わせてください';
-    setupTorch();
+    msg.textContent = SCAN_MSG;
+    setupTrack();
     scanning = true;
-    requestAnimationFrame(tick);
+    startLoop();
   } catch (e) {
     console.error(e);
     msg.textContent = location.protocol !== 'https:' && location.hostname !== 'localhost'
@@ -38,11 +44,18 @@ async function startCamera() {
   }
 }
 
+function stopCamera() {
+  cameraRequest++;
+  scanning = false;
+  stream?.getTracks().forEach((t) => t.stop());
+  stream = null;
+  viewCtx.clearRect(0, 0, view.width, view.height);
+}
+
 // 映像は <video> をそのまま見せず、表示用 canvas に毎フレーム描く。
 // iPhoneは <video> の表示サイズを起動直後に小さく描くことがあるため、
 // 描く大きさを自分で決めて、最初から枠いっぱいに表示する
 const view = $('view'), viewCtx = view.getContext('2d');
-let rendering = false;
 
 function fitView() {
   const r = view.getBoundingClientRect();
@@ -52,31 +65,39 @@ function fitView() {
 }
 new ResizeObserver(fitView).observe(view);
 
-function startRender() {
-  if (rendering) return;
-  rendering = true;
-  const draw = () => {
-    if (!stream) { rendering = false; return; }
+// 描画と読み取りを1つのループで回す（カメラが動いている間だけ）
+let looping = false, decoding = false, lastScan = 0;
+function startLoop() {
+  if (looping) return;
+  looping = true;
+  const frame = (ts) => {
+    if (!stream) { looping = false; return; }
     const vw = video.videoWidth, vh = video.videoHeight;
     if (vw && vh && view.width && view.height) {
       // object-fit: cover と同じ切り抜き
       const scale = Math.max(view.width / vw, view.height / vh);
       const dw = vw * scale, dh = vh * scale;
       viewCtx.drawImage(video, (view.width - dw) / 2, (view.height - dh) / 2, dw, dh);
+      // 読み取りは約10fpsに間引いてバッテリー節約
+      if (scanning && !decoding && ts - lastScan > 100) {
+        lastScan = ts;
+        decoding = true;
+        decodeSource(video, vw, vh)
+          .then((data) => { if (data && scanning && !isCoolingDown(data)) onDetected(data); })
+          .catch(() => {})
+          .finally(() => { decoding = false; });
+      }
     }
-    requestAnimationFrame(draw);
+    requestAnimationFrame(frame);
   };
-  requestAnimationFrame(draw);
+  requestAnimationFrame(frame);
 }
 
-function stopCamera() {
-  scanning = false;
-  stream?.getTracks().forEach((t) => t.stop());
-  stream = null;
-  viewCtx.clearRect(0, 0, view.width, view.height);
-}
+// 結果を閉じた直後に、まだ写っている同じQRをすぐ読み直さない
+let closedData = null, closedAt = 0;
+const isCoolingDown = (data) => data === closedData && Date.now() - closedAt < 2000;
 
-function setupTorch() {
+function setupTrack() {
   const track = stream?.getVideoTracks()[0];
   // 他の画面やアプリにカメラを奪われたら、表示中なら起動し直す
   if (track) track.onended = () => {
@@ -91,10 +112,9 @@ function setupTorch() {
 
 let msgTimer = null;
 function flashMsg(t) {
-  const prev = 'QRコードを枠内に合わせてください';
   msg.textContent = t;
   clearTimeout(msgTimer);
-  msgTimer = setTimeout(() => (msg.textContent = prev), 2500);
+  msgTimer = setTimeout(() => (msg.textContent = SCAN_MSG), 2500);
 }
 
 $('btnTorch').onclick = async () => {
@@ -107,24 +127,11 @@ $('btnTorch').onclick = async () => {
   $('btnTorch').setAttribute('aria-pressed', String(torchOn));
 };
 
-let lastScan = 0;
-async function tick(ts) {
-  if (!scanning) return;
-  // 約10fpsに間引いてバッテリー節約
-  if (ts - lastScan > 100 && video.readyState === video.HAVE_ENOUGH_DATA) {
-    lastScan = ts;
-    const data = await decodeSource(video, video.videoWidth, video.videoHeight);
-    if (data) return onDetected(data);
-  }
-  requestAnimationFrame(tick);
-}
-
 async function decodeSource(source, w, h) {
   if (detector) {
     try {
       const codes = await detector.detect(source);
-      if (codes.length) return codes[0].rawValue;
-      return null;
+      return codes.length ? codes[0].rawValue : null;
     } catch { /* jsQRにフォールバック */ }
   }
   // 大きすぎる画像は縮小して処理
@@ -210,7 +217,8 @@ function hideResult() {
 $('scrim').onclick = () => $('btnCloseResult').click();
 $('btnCloseResult').onclick = () => {
   hideResult();
-  if (stream && stream.active) { scanning = true; requestAnimationFrame(tick); } else startCamera();
+  closedData = currentData; closedAt = Date.now();
+  if (stream?.active) scanning = true; else startCamera();
 };
 
 // 画像ファイルから読み取り
@@ -223,8 +231,8 @@ $('file').onchange = async (e) => {
     const bmp = await createImageBitmap(file);
     const data = await decodeSource(bmp, bmp.width, bmp.height);
     if (data) onDetected(data);
-    else { alert('QRコードが見つかりませんでした'); if (stream) { scanning = true; requestAnimationFrame(tick); } }
-  } catch { alert('画像を読み込めませんでした'); }
+    else { alert('QRコードが見つかりませんでした'); if (stream) scanning = true; }
+  } catch { alert('画像を読み込めませんでした'); if (stream) scanning = true; }
 };
 
 // 履歴（端末内のlocalStorageのみに保存）
