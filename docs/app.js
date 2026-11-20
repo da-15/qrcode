@@ -151,8 +151,6 @@ function onDetected(data) {
   showResult(data);
 }
 
-const isIOSHomeScreenApp = navigator.standalone === true;
-
 function isUrl(s) {
   try { const u = new URL(s); return ['http:', 'https:'].includes(u.protocol); } catch { return false; }
 }
@@ -171,19 +169,9 @@ function showResult(data) {
     $('rHost').textContent = u.hostname.replace(/^www\./, '');
     $('rHost').hidden = false;
     text.textContent = decodeURIComponentSafe(data);
+    open.href = data;
     const sameApp = data.startsWith(new URL('./', location.href).href);
-    if (sameApp) {
-      open.href = data;
-      open.removeAttribute('target');
-    } else if (isIOSHomeScreenApp) {
-      // iPhoneのホーム画面アプリでは外部リンクがアプリ内ブラウザで開くため、
-      // x-safari- を付けてSafariで開く
-      open.href = 'x-safari-' + data;
-      open.removeAttribute('target');
-    } else {
-      open.href = data;
-      open.target = '_blank';
-    }
+    if (sameApp) open.removeAttribute('target'); else open.target = '_blank';
     open.hidden = false;
   } else {
     $('rHost').hidden = true;
